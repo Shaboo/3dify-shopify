@@ -12,4 +12,6 @@ Validation: 8 boundary tests passed; TypeScript and Vite production build passed
 
 Integration review corrected the backend terminal status to SUCCESS (COMPLETED is tolerated for compatibility), added one fresh-token replay on HTTP 401 preserving the original multipart body/key, and confirmed official current Shopify TOML documentation. Subscription allowancePeriodStart/End fields are accepted and monthly allowancePeriodEnd is shown separately from provider periodEnd. CI includes boundary/build checks and Chromium workflow test.
 
-Backend contract baseline:  on backend main (Harden Shopify quotas, billing lifecycle and provider integration), final backend validation 140 tests passed. Final app workflow includes media processing readiness query returning READY in browser fixture.
+Backend contract baseline: b7bcb48 on backend main (Harden Shopify quotas, billing lifecycle and provider integration), final backend validation 140 tests passed. Final app workflow includes media processing readiness query returning READY in browser fixture.
+
+Initial app commit d732e06 records the complete implementation; follow-up documentation commit records its hash and backend baseline. Remote target is git@github.com:Shaboo/3dify-shopify.git, branch main. Next session should verify remote branch/current history before changing or deploying configuration. No remote CI verification requested in this session.
