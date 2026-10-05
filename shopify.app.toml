@@ -1,0 +1,30 @@
+# Replace public identifiers and URLs before deploying configuration.
+client_id = "REPLACE_WITH_CLIENT_ID"
+name = "3dify"
+application_url = "https://app.example.com"
+embedded = true
+
+[build]
+automatically_update_urls_on_dev = false
+
+[access_scopes]
+scopes = "read_products,write_products"
+use_legacy_install_flow = false
+
+[auth]
+redirect_urls = ["https://app.example.com"]
+
+[access.admin]
+direct_api_mode = "online"
+embedded_app_direct_api_access = true
+
+[webhooks]
+api_version = "2026-10"
+
+[[webhooks.subscriptions]]
+topics = ["app/uninstalled"]
+uri = "https://api.example.com/shopify/webhooks"
+
+[[webhooks.subscriptions]]
+compliance_topics = ["customers/data_request", "customers/redact", "shop/redact"]
+uri = "https://api.example.com/shopify/webhooks"
