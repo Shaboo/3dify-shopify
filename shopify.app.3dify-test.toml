@@ -1,0 +1,24 @@
+# Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
+
+client_id = "aafff0ff1c4d6514485dcfb0a98bb104"
+application_url = "https://example.com"
+embedded = true
+name = "3dify-test"
+
+[webhooks]
+api_version = "2027-01"
+
+[access_scopes]
+# Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
+scopes = "read_products,write_products"
+
+[auth]
+redirect_urls = [ "https://example.com/api/auth" ]
+
+[build]
+include_config_on_deploy = true
+automatically_update_urls_on_dev = true
+
+[access.admin]
+direct_api_mode = "online"
+embedded_app_direct_api_access = true

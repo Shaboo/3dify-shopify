@@ -1,4 +1,4 @@
-name = "3dify merchant UI"
+name = "3dify-test"
 roles = ["frontend"]
 port = 5173
 [commands]

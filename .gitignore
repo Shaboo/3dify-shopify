@@ -6,3 +6,8 @@ dist/
 coverage/
 test-results/
 playwright-report/
+
+extensions/product-model/src/backend-url.js
+extensions/product-model/dist/
+
+extensions/product-model/manifest.json

@@ -8,6 +8,89 @@ import {
 } from "../src/api";
 import { attachModel, graphql } from "../src/shopify";
 describe("backend boundary", () => {
+  it("continues polling completed jobs while automatic attachment is pending", () => {
+    expect(
+      isRunning({
+        status: "SUCCESS",
+        productId: "gid://shopify/Product/1",
+        attachmentStatus: "processing",
+      } as Model),
+    ).toBe(true);
+    for (const attachmentStatus of ["attached", "failed", "canceled"])
+      expect(
+        isRunning({
+          status: "SUCCESS",
+          productId: "gid://shopify/Product/1",
+          attachmentStatus,
+        } as Model),
+      ).toBe(false);
+  });
+  it("sends selected image IDs and binds uploaded photos to their product", async () => {
+    const request = vi
+      .fn()
+      .mockImplementation(
+        async () =>
+          new Response(JSON.stringify({ jobId: "job", status: "PENDING" })),
+      );
+    const api = backendClient(
+      "https://api.example.com",
+      async () => "token",
+      request,
+    );
+    await api.generateProduct(
+      "gid://shopify/Product/1",
+      ["gid://shopify/MediaImage/2"],
+      "stable",
+    );
+    expect(request.mock.calls[0][0]).toContain("/products/1/models");
+    expect(JSON.parse(request.mock.calls[0][1].body)).toEqual({
+      imageIds: ["gid://shopify/MediaImage/2"],
+    });
+    await api.generate(
+      [new File(["x"], "x.png", { type: "image/png" })],
+      "upload",
+      "gid://shopify/Product/1",
+    );
+    expect((request.mock.calls[1][1].body as FormData).get("productId")).toBe(
+      "gid://shopify/Product/1",
+    );
+  });
+  it("accepts provider-specific photo counts including providers without a ceiling", () => {
+    const photos = Array.from(
+      { length: 100 },
+      (_, i) => new File(["x"], `${i}.png`, { type: "image/png" }),
+    );
+    for (const count of [1, 2, 3, 4])
+      expect(() => validateImages(photos.slice(0, count))).not.toThrow();
+    expect(() => validateImages(photos.slice(0, 5))).toThrow(/meshy/);
+    expect(() =>
+      validateImages(photos, {
+        provider: "future",
+        minImages: 1,
+        maxImages: null,
+      }),
+    ).not.toThrow();
+  });
+  it("sends every selected photo in order", async () => {
+    const request = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ jobId: "job", status: "PENDING" })),
+      );
+    const photos = Array.from(
+      { length: 4 },
+      (_, i) => new File([String(i)], `${i}.png`, { type: "image/png" }),
+    );
+    await backendClient(
+      "https://api.example.com",
+      async () => "token",
+      request,
+    ).generate(photos, "key");
+    const body = request.mock.calls[0][1].body as FormData;
+    expect(body.getAll("images").map((x) => (x as File).name)).toEqual(
+      photos.map((x) => x.name),
+    );
+  });
   it("stops polling canonical SUCCESS and FAILED backend states", () => {
     for (const status of ["SUCCESS", "FAILED"])
       expect(isRunning({ status } as Model)).toBe(false);
@@ -80,7 +163,7 @@ describe("backend boundary", () => {
       (request.mock.calls[1][1].headers as Headers).get("Authorization"),
     ).toBe("Bearer two");
     expect(
-      (request.mock.calls[0][1].body as FormData).get("image2"),
+      (request.mock.calls[0][1].body as FormData).getAll("images")[1],
     ).toBeInstanceOf(File);
   });
   it("reports backend errors without logging a token", async () => {

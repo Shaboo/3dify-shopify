@@ -1,3 +1,18 @@
+export interface GenerationOptions {
+  provider: string;
+  minImages: number;
+  maxImages: number | null;
+}
+export interface ProductPhoto {
+  id: string;
+  url: string;
+  alt: string | null;
+}
+export interface Product {
+  id: string;
+  title: string;
+  images: ProductPhoto[];
+}
 export interface Model {
   id: string;
   status: string;
@@ -5,6 +20,9 @@ export interface Model {
   outputUsdzUrl: string | null;
   errorMessage: string | null;
   createdAt: string;
+  productId?: string | null;
+  attachmentStatus?: string | null;
+  attachmentError?: string | null;
 }
 export interface Subscription {
   status: string;
@@ -64,16 +82,33 @@ export function backendClient(
   };
   return {
     connect: () => call("/connection", { method: "POST" }),
+    generationOptions: () => call<GenerationOptions>("/generation-options"),
     subscription: () => call<Subscription>("/subscription"),
     models: (cursor?: string) =>
       call<ModelPage>(
         `/models${cursor ? `?before=${encodeURIComponent(cursor)}` : ""}`,
       ),
     model: (id: string) => call<Model>(`/models/${encodeURIComponent(id)}`),
-    generate: (images: File[], key: string) => {
+    productImages: (productId: string) =>
+      call<Product>(
+        `/products/${encodeURIComponent(productId.split("/").at(-1)!)}/images`,
+      ),
+    generateProduct: (productId: string, imageIds: string[], key: string) =>
+      call<{ jobId: string; status: string }>(
+        `/products/${encodeURIComponent(productId.split("/").at(-1)!)}/models`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Idempotency-Key": key,
+          },
+          body: JSON.stringify({ imageIds }),
+        },
+      ),
+    generate: (images: File[], key: string, productId?: string) => {
       const body = new FormData();
-      body.append("image1", images[0]);
-      body.append("image2", images[1]);
+      images.forEach((image) => body.append("images", image));
+      if (productId) body.append("productId", productId);
       return call<{ jobId: string; status: string }>("/models", {
         method: "POST",
         headers: { "Idempotency-Key": key },
@@ -82,9 +117,17 @@ export function backendClient(
     },
   };
 }
-export function validateImages(images: File[]) {
+export function validateImages(
+  images: File[],
+  options: GenerationOptions = {
+    provider: "meshy",
+    minImages: 1,
+    maxImages: 4,
+  },
+) {
   if (
-    images.length !== 2 ||
+    images.length < options.minImages ||
+    (options.maxImages !== null && images.length > options.maxImages) ||
     images.some(
       (x) =>
         !x.size ||
@@ -92,7 +135,9 @@ export function validateImages(images: File[]) {
         x.size > 20 * 1024 * 1024,
     )
   )
-    throw new Error("Choose two JPEG, PNG or WebP images, each under 20 MB.");
+    throw new Error(
+      `Choose ${options.maxImages === null ? "one or more" : `${options.minImages}–${options.maxImages}`} JPEG, PNG or WebP photos for ${options.provider}, each up to 20 MB.`,
+    );
 }
 export function pricingDestination(value: string): string {
   const url = new URL(value);
@@ -101,5 +146,11 @@ export function pricingDestination(value: string): string {
   return url.href;
 }
 export function isRunning(model: Model): boolean {
-  return !["SUCCESS", "COMPLETED", "FAILED"].includes(model.status);
+  return (
+    !["SUCCESS", "COMPLETED", "FAILED"].includes(model.status) ||
+    (!!model.productId &&
+      !["attached", "failed", "canceled"].includes(
+        model.attachmentStatus || "waiting",
+      ))
+  );
 }

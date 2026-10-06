@@ -1,0 +1,10 @@
+api_version = "2026-10"
+
+[[extensions]]
+name = "Generate 3D model"
+handle = "3dify-product-model"
+type = "ui_extension"
+
+[[extensions.targeting]]
+module = "./src/BlockExtension.jsx"
+target = "admin.product-details.block.render"

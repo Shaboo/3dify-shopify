@@ -12,13 +12,26 @@
     "preview": "vite preview --host 0.0.0.0",
     "test": "vitest run",
     "check": "npm run test && npm run build",
-    "test:browser": "playwright test"
+    "test:browser": "playwright test",
+    "sync:extension": "node scripts/sync-extension-config.mjs",
+    "predev": "npm run sync:extension",
+    "prebuild": "node scripts/sync-extension-config.mjs production",
+    "postinstall": "npm run sync:extension"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",
+    "@shopify/ui-extensions": "^2026.7.0",
     "prettier": "^3.9.9",
     "typescript": "^5.9.3",
     "vite": "^7.1.7",
     "vitest": "^5.0.3"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true,
+    "fsevents@2.3.3": true
+  },
+  "dependencies": {
+    "@preact/signals": "^2.11.3",
+    "preact": "^11.0.0"
   }
 }
