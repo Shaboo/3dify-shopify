@@ -3,6 +3,7 @@ api_version = "2026-10"
 [[extensions]]
 name = "Generate 3D model"
 handle = "3dify-product-model"
+uid = "e16514e0-35b5-ea51-3c34-39f8535f666356b16286"
 type = "ui_extension"
 
 [[extensions.targeting]]

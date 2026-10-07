@@ -20,6 +20,7 @@ function ProductModel() {
   );
   const [product, setProduct] = useState(null);
   const [options, setOptions] = useState(null);
+  const [subscription, setSubscription] = useState(null);
   const [selected, setSelected] = useState([]);
   const [jobs, setJobs] = useState([]);
   const [error, setError] = useState("");
@@ -79,6 +80,21 @@ function ProductModel() {
       clearInterval(timer);
     };
   }, [jobs]);
+  useEffect(() => {
+    if (!api || !product) return;
+    let active = true;
+    api
+      .subscription()
+      .then((plan) => {
+        if (active) setSubscription(plan);
+      })
+      .catch(() => {
+        if (active) setSubscription(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [api, product]);
   async function generate() {
     if (!api || !product || !options || busy) return;
     if (
@@ -98,6 +114,7 @@ function ProductModel() {
       const result = await api.generateProduct(product.id, selected, key);
       setRequestKey(null);
       setSelected([]);
+      setSubscription(await api.subscription().catch(() => null));
       setMessage(
         "Generation started. The model will be attached automatically; you can leave this page.",
       );
@@ -129,6 +146,13 @@ function ProductModel() {
         {!productId && (
           <s-text>Save this product before generating a model.</s-text>
         )}
+        {subscription?.localTesting && (
+          <s-banner tone="info">
+            Local testing — Shopify billing disabled.{" "}
+            {subscription.generationsConsumed} / {subscription.generationLimit}{" "}
+            generations used. Model generation may incur provider charges.
+          </s-banner>
+        )}
         {loading && <s-spinner />}
         {error && <s-banner tone="critical">{error}</s-banner>}
         {message && <s-banner tone="success">{message}</s-banner>}
@@ -144,7 +168,11 @@ function ProductModel() {
             )}
             {product.images.map((photo) => (
               <s-stack key={photo.id} direction="inline" gap="base">
-                <s-thumbnail size="large" src={photo.url} alt={photo.alt || "Product photo"} />
+                <s-thumbnail
+                  size="large"
+                  src={photo.url}
+                  alt={photo.alt || "Product photo"}
+                />
                 <s-checkbox
                   label={
                     photo.alt || `Photo ${product.images.indexOf(photo) + 1}`

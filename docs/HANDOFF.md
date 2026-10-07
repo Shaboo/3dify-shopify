@@ -1,17 +1,52 @@
-# Session handoff — 2026-10-05
+# Shopify app handover — 2026-10-07
 
-User requested all remaining backend work and a separate Shopify-facing repository at `~/Documents/3dify-shopify`, pushed to `git@github.com:Shaboo/3dify-shopify.git`. Remote was empty before implementation. Backend remains `~/Documents/3dify` and its separate agent owns backend policy fixes.
+The merchant app and product-page block support testing with backend local billing. The standalone website now provides a second generation test path independent of Shopify.
 
-Implemented merchant app using Vite/TypeScript, App Bridge CDN and pinned Polaris 1.1 CDN. Explicit fresh ID token per backend request, managed install/online Direct API config, connection, subscription and hosted pricing, two-image generation, stable UUID retries within a page, paginated models and job polling, product resource picker, GLB staged upload/product media creation, best-effort duplicate check. Backend contract is `/shopify/api/{connection,subscription,models}`; `Idempotency-Key` on POST models. API version pinned to 2026-10.
+## Related repositories
 
-No client secrets, credentials, product changes, installed Shopify store, external hosted deployment or live tests were possible/supplied. Configuration contains deliberate example URLs and public client ID placeholders. Production requires environment and Shopify TOML configuration plus HTTPS hosting with framing CSP, backend origin CORS and generated-output source CORS. Live validation checklist is in README. Keep source credentials out of VITE environment variables: they are public browser bundle values.
+- Backend: `/Users/shaboo/Documents/3dify` → `git@github.com:Shaboo/3dify.git`.
+- Standalone website: `/Users/shaboo/Documents/3dify-fe` → `git@github.com:Shaboo/3dify-fe.git`.
+- Shopify app: `/Users/shaboo/Documents/3dify-shopify` → `git@github.com:Shaboo/3dify-shopify.git`.
 
-Known practical limits: retry identity survives only within the current page; file selection cannot be recovered on reload. Check model list after uncertain acceptance. Product media duplicate check can race across tabs; media processing is polled sequentially for up to 55 seconds; READY/FAILED is displayed, longer processing can be rechecked by selecting the product again. Failed media recovery instructs removal from Shopify before retry. Product media upload reads up to Shopify's documented 500 MB maximum into browser memory. Output provider availability/retention is backend-owned.
+All use branch `main`. These handovers are persistent repository context, not automatic model memory. Read the other repos’ current handovers when changing contracts across projects.
 
-Validation: 8 boundary tests passed; TypeScript and Vite production build passed with public test environment configured. Chromium mocked merchant workflow passed: connection, annual monthly allowance display, transient generation failure, retry preserving same UUID/files, canonical backend SUCCESS state, product selection and staged media attachment. App Bridge/Polaris CDN and Shopify/backend responses are mocked in that browser test; this is not live Shopify verification. Browser validation uncovered a form reset method shadowed by a button ID, which was fixed. npm install/audit reported zero vulnerabilities after updating Vitest to 5.0.3.
+## Current behavior
 
-Integration review corrected the backend terminal status to SUCCESS (COMPLETED is tolerated for compatibility), added one fresh-token replay on HTTP 401 preserving the original multipart body/key, and confirmed official current Shopify TOML documentation. Subscription allowancePeriodStart/End fields are accepted and monthly allowancePeriodEnd is shown separately from provider periodEnd. CI includes boundary/build checks and Chromium workflow test.
+Merchant selects a saved product, chooses existing saved product photos or alternate uploads, then generates asynchronously. Backend attaches completed owned GLB output in the background, even after the app closes. The Preact admin block targets `admin.product-details.block.render`; merchants must add/pin **Generate 3D model**. New products must be saved first. Manual **Refresh** loads photos added/changed after saving; user accepts this for now. Do not promise automatic refresh.
 
-Backend contract baseline: b7bcb48 on backend main (Harden Shopify quotas, billing lifecycle and provider integration), final backend validation 140 tests passed. Final app workflow includes media processing readiness query returning READY in browser fixture.
+Product image listing and product-bound image-ID/multipart submission are supported. Stable UUID retries and attachment status polling preserve backend idempotency. Generation-options comes from backend: Meshy 1–4 photos, existing RunPod worker 1–2; no global provider ceiling. Backend upload defaults are 20 MB/photo and 85 MB/request.
 
-Initial app commit d732e06 records the complete implementation; follow-up documentation commit records its hash and backend baseline. Remote target is git@github.com:Shaboo/3dify-shopify.git, branch main. Next session should verify remote branch/current history before changing or deploying configuration. No remote CI verification requested in this session.
+Subscription responses expose `localTesting`. Embedded app and product block display local test allowance and provider-cost notice; Manage plan is disabled in local testing. Real backend authentication, staff write permissions, quota accounting, outbox and background attachment still apply. Extension UID is retained in `shopify.extension.toml`.
+
+## Billing and generation diagnostics
+
+Real Partner billing remains blocked by app visibility under the configured organization and App Store registration/pricing access. The Partner organization billing token is separate from per-store encrypted offline access/refresh credentials. Current testing does not require paying the App Store registration fee.
+
+Backend `shopify.billing-mode=local-test` works only when `local` is the sole active profile and the configured store ID/domain match. Current verified store: `3dify-test.myshopify.com`, Shop ID `85878767704`; allowance 10 generations per UTC calendar month, durably enforced. Internal test plan is inactive with no public offer. Default/production billing mode remains `shopify`. Real provider credits still apply.
+
+Earlier UI showed **Attachment canceled / Generation failed or app disconnected** because generation failed, not because connection was confirmed lost. Backend cancellation now distinguishes generation failure, disconnection and changed installation. Meshy timeout is configurable (120 seconds locally) with safe HTTP/transport diagnostics. Original ~31-second failure cannot be conclusively attributed to timeout because the cause was discarded. User performs paid reproductions themselves; do not submit generation automatically.
+
+Two later user tasks have acknowledged Meshy IDs but completion/automatic media attachment has not been verified. Mocked success is not live end-to-end proof.
+
+## Run and preserve configuration
+
+Start backend via IntelliJ **3dify Local**, then an HTTPS backend tunnel. Set public `VITE_BACKEND_URL` in the existing ignored environment file, allow required HTTPS app/extension origins in backend config, and run:
+
+```sh
+npm run sync:extension
+shopify app dev --config 3dify-test
+```
+
+`extensions/product-model/src/backend-url.js` is generated/ignored. Preserve the current environment and dev URL. Never put credentials in VITE variables. Required scopes `read_products,write_products`; online Direct API enabled. Backend exchanges/refreshes encrypted offline credentials automatically; no manual store token copy is needed. Keep persistent backend AES key intact.
+
+The standalone website at http://localhost:3000 needs no tunnel or Shopify origin. Website user/admin accounts and free plan are separate from Shopify store authentication and local allowance. See `../3dify-fe/docs/HANDOFF.md` locally.
+
+## Validation and next steps
+
+API tests/TypeScript/Vite build and mocked merchant browser workflows validate local billing notices and product generation behavior. Browser tests use isolated port 5178 and skip extension-config sync. Extension build was verified earlier; the current change adds its assigned UID and local testing notice. Full validation counts are recorded below. Production audit previously reported zero vulnerabilities; SDK development-tooling advisories were not fixed by unrelated major upgrades.
+
+Next: user tests a live product-photo generation and follows provider status, then confirms automatic Shopify media READY including closing the app during processing. Test standalone generation separately. Real Shopify billing and live attachment remain unverified. No deployment/publication requested.
+
+## Final verification before commit/push
+
+2026-10-07: backend full suite passed **110 unit + 105 integration tests (215 total)** and Spotless/architecture checks. Shopify passed **12 API tests**, TypeScript/Vite production build, and **3 mocked browser workflows** on isolated port 5178. Standalone website previously passed **24 desktop/mobile/proxy checks**, TypeScript and production build. No paid provider submission, deployment or app publication was performed for these checks. All current work and handovers are being committed/pushed to `origin/main` at the user’s request.

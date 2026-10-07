@@ -25,6 +25,7 @@ export interface Model {
   attachmentError?: string | null;
 }
 export interface Subscription {
+  localTesting?: boolean;
   status: string;
   planName: string | null;
   periodEnd: string | null;

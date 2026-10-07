@@ -185,15 +185,13 @@ test("uploaded photos are bound to the chosen product and locked for retry", asy
   await page.getByRole("button", { name: "Choose product" }).click();
   await expect(page.locator("#selected-product")).toHaveText("Test product");
   await page.locator("#photo-source").selectOption("upload");
-  await page
-    .locator("input[name=images]")
-    .setInputFiles(
-      Array.from({ length: 4 }, (_, i) => ({
-        name: `${i}.png`,
-        mimeType: "image/png",
-        buffer: Buffer.from([1, 2, 3]),
-      })),
-    );
+  await page.locator("input[name=images]").setInputFiles(
+    Array.from({ length: 4 }, (_, i) => ({
+      name: `${i}.png`,
+      mimeType: "image/png",
+      buffer: Buffer.from([1, 2, 3]),
+    })),
+  );
   await page
     .getByRole("button", { name: "Generate model", exact: true })
     .click();
@@ -208,4 +206,59 @@ test("uploaded photos are bound to the chosen product and locked for retry", asy
   expect(keys[0]).toBe(keys[1]);
   await page.getByRole("button", { name: "Start a new request" }).click();
   await expect(page.locator("#choose-product")).toBeEnabled();
+});
+
+test("local billing shows its allowance, disables plan management and keeps product selection usable", async ({
+  page,
+}) => {
+  await bridge(page);
+  let localTesting = true;
+  await page.route("https://api.example.com/**", async (route) => {
+    const request = route.request();
+    const path = new URL(request.url()).pathname;
+    const headers = {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Headers": "*",
+      "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+    };
+    if (request.method() === "OPTIONS")
+      return route.fulfill({ status: 204, headers });
+    if (path.endsWith("/subscription"))
+      return route.fulfill({
+        json: {
+          ...plan,
+          localTesting,
+          pricingUrl: localTesting ? "" : plan.pricingUrl,
+          generationsConsumed: 3,
+        },
+        headers,
+      });
+    if (path.endsWith("/generation-options"))
+      return route.fulfill({
+        json: { provider: "meshy", minImages: 1, maxImages: 4 },
+        headers,
+      });
+    if (path.endsWith("/images"))
+      return route.fulfill({ json: product, headers });
+    return route.fulfill({
+      json: path.endsWith("/models") ? { models: [], nextCursor: null } : {},
+      headers,
+    });
+  });
+  await page.goto("/");
+  await expect(page.locator("#notice")).toHaveText("Store connected.");
+  await expect(page.locator("#billing-mode")).toBeVisible();
+  await expect(page.locator("#billing-mode")).toContainText(
+    "Local testing — Shopify billing disabled",
+  );
+  await expect(page.locator("#subscription")).toContainText(
+    "3 / 10 generations used",
+  );
+  await expect(page.locator("#pricing")).toHaveAttribute("disabled", "");
+  await page.getByRole("button", { name: "Choose product" }).click();
+  await expect(page.locator("#selected-product")).toHaveText("Test product");
+  localTesting = false;
+  await page.locator("#refresh").click();
+  await expect(page.locator("#billing-mode")).toBeHidden();
+  await expect(page.locator("#pricing")).not.toHaveAttribute("disabled", "");
 });

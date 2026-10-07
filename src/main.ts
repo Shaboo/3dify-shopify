@@ -9,7 +9,7 @@ import {
 import { attachModel, findAttachment, waitForAttachment } from "./shopify";
 import "./style.css";
 const app = document.querySelector<HTMLDivElement>("#app")!;
-app.innerHTML = `<s-page heading="3dify"><s-section heading="Create 3D models from product photos"><s-paragraph>Choose photos showing different views of your product, and we will automatically add the finished model to the selected product. You can close this page while it runs.</s-paragraph></s-section><div id="notice" role="status" aria-live="polite"></div><s-section heading="Your plan"><p id="subscription">Connecting to your store…</p><s-button id="pricing" disabled>Manage plan</s-button><s-button id="refresh">Refresh</s-button></s-section><s-section heading="New model"><form id="generation"><button type="button" id="choose-product">Choose product</button><p id="selected-product">Choose a saved product to get started.</p><div id="product-photos"></div><label>Photo source<select id="photo-source"><option value="product">Use photos already on the product</option><option value="upload">Upload different photos</option></select></label><div id="upload-photos" class="images" hidden><label>Product photos<input name="images" type="file" accept="image/jpeg,image/png,image/webp" multiple></label></div><p id="photo-limits">Loading photo limits…</p><p>JPEG, PNG or WebP, up to 20 MB each. Accepted generations use one allowance, including models that fail.</p><button type="submit" id="generate">Generate model</button><button type="button" id="new-request">Start a new request</button><p id="retry"></p></form></s-section><s-section heading="Your models"><div id="models"></div><button id="more" hidden>Load more</button></s-section></s-page>`;
+app.innerHTML = `<s-page heading="3dify"><s-section heading="Create 3D models from product photos"><s-paragraph>Choose photos showing different views of your product, and we will automatically add the finished model to the selected product. You can close this page while it runs.</s-paragraph></s-section><div id="notice" role="status" aria-live="polite"></div><s-section heading="Your plan"><p id="billing-mode" hidden></p><p id="subscription">Connecting to your store…</p><s-button id="pricing" disabled>Manage plan</s-button><s-button id="refresh">Refresh</s-button></s-section><s-section heading="New model"><form id="generation"><button type="button" id="choose-product">Choose product</button><p id="selected-product">Choose a saved product to get started.</p><div id="product-photos"></div><label>Photo source<select id="photo-source"><option value="product">Use photos already on the product</option><option value="upload">Upload different photos</option></select></label><div id="upload-photos" class="images" hidden><label>Product photos<input name="images" type="file" accept="image/jpeg,image/png,image/webp" multiple></label></div><p id="photo-limits">Loading photo limits…</p><p>JPEG, PNG or WebP, up to 20 MB each. Accepted generations use one allowance, including models that fail.</p><button type="submit" id="generate">Generate model</button><button type="button" id="new-request">Start a new request</button><p id="retry"></p></form></s-section><s-section heading="Your models"><div id="models"></div><button id="more" hidden>Load more</button></s-section></s-page>`;
 const notice = (message: string, error = false) => {
   const el = document.querySelector<HTMLElement>("#notice")!;
   el.textContent = message;
@@ -131,8 +131,16 @@ if (
   async function refreshPlan() {
     subscription = await api.subscription();
     document.querySelector("#subscription")!.textContent =
-      `${subscription.planName || "No active plan"} · ${subscription.status} · ${subscription.generationsConsumed} / ${subscription.generationLimit} generations used${subscription.allowancePeriodEnd ? ` · allowance renews ${new Date(subscription.allowancePeriodEnd).toLocaleDateString()}` : ""}${subscription.periodEnd ? ` · billing period ends ${new Date(subscription.periodEnd).toLocaleDateString()}` : ""}`;
-    document.querySelector("#pricing")!.removeAttribute("disabled");
+      `${subscription.localTesting ? "Local test allowance" : subscription.planName || "No active plan"} · ${subscription.status} · ${subscription.generationsConsumed} / ${subscription.generationLimit} generations used${subscription.allowancePeriodEnd ? ` · allowance renews ${new Date(subscription.allowancePeriodEnd).toLocaleDateString()}` : ""}${subscription.periodEnd ? ` · ${subscription.localTesting ? "test period" : "billing period"} ends ${new Date(subscription.periodEnd).toLocaleDateString()}` : ""}`;
+    const testing = subscription.localTesting === true;
+    const mode = document.querySelector<HTMLElement>("#billing-mode")!;
+    mode.hidden = !testing;
+    mode.textContent = testing
+      ? "Local testing — Shopify billing disabled. Model generation may incur provider charges."
+      : "";
+    document
+      .querySelector("#pricing")!
+      .toggleAttribute("disabled", testing || !subscription.pricingUrl);
   }
   function renderModels() {
     const container = document.querySelector("#models")!;
@@ -293,7 +301,12 @@ if (
   });
   document.querySelector("#pricing")!.addEventListener("click", () => {
     try {
-      if (!subscription) return;
+      if (
+        !subscription ||
+        subscription.localTesting ||
+        !subscription.pricingUrl
+      )
+        return;
       window.open(pricingDestination(subscription.pricingUrl), "_top");
     } catch (error) {
       notice(errorText(error), true);
